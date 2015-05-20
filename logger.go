@@ -38,7 +38,7 @@ func NewFile(pkg, file string) log15.Logger {
 func NewSyslog(pkg, tag string) log15.Logger {
 	log := log15.New("pkg", pkg)
 	log.Info("Switching logging to syslog", "tag", tag)
-	sysWr, err := syslogNew(syslog.LOG_INFO|syslog.LOG_LOCAL0, tag)
+	sysWr, err := syslogNew(syslog.LOG_NOTICE|syslog.LOG_LOCAL0, tag)
 	if err != nil {
 		// Don't try to use log as that could panic
 		fmt.Printf("Can't connect to syslog: %s", err)

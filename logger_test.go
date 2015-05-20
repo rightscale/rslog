@@ -46,7 +46,7 @@ var _ = Describe("Logger", func() {
 			It("creates a valid logger", func() {
 				Ω(logger).ShouldNot(BeNil())
 				Ω(usedTag).Should(Equal(tag))
-				Ω(usedPriority).Should(Equal(syslog.LOG_INFO | syslog.LOG_LOCAL0))
+				Ω(usedPriority).Should(Equal(syslog.LOG_NOTICE | syslog.LOG_LOCAL0))
 			})
 		})
 
