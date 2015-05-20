@@ -1,12 +1,13 @@
-package rslog_test
+package rslog
 
 import (
+	"fmt"
 	"io/ioutil"
+	"log/syslog"
 	"os"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/rightscale/rslog"
 	"gopkg.in/inconshreveable/log15.v2"
 
 	"testing"
@@ -25,20 +26,44 @@ var _ = Describe("Logger", func() {
 		var tag string
 
 		JustBeforeEach(func() {
-			logger = rslog.NewSyslog(pkg, tag)
+			logger = NewSyslog(pkg, tag)
 		})
 
 		Describe("with a valid setup", func() {
+			var usedTag string
+			var usedPriority syslog.Priority
+
 			BeforeEach(func() {
 				tag = "foo"
 				pkg = "PACKAGE"
+				syslogNew = func(p syslog.Priority, t string) (*syslog.Writer, error) {
+					usedTag = t
+					usedPriority = p
+					return &syslog.Writer{}, nil
+				}
 			})
 
 			It("creates a valid logger", func() {
 				Ω(logger).ShouldNot(BeNil())
+				Ω(usedTag).Should(Equal(tag))
+				Ω(usedPriority).Should(Equal(syslog.LOG_INFO | syslog.LOG_LOCAL0))
+			})
+		})
+
+		Describe("when syslog connection fails", func() {
+			var exitStatus int
+
+			BeforeEach(func() {
+				syslogNew = func(_ syslog.Priority, _ string) (*syslog.Writer, error) {
+					return nil, fmt.Errorf("kaboom")
+				}
+				osExit = func(s int) { exitStatus = s }
 			})
 
-			// XXX TBD: mock syslog??
+			It("exits the process with status code 1", func() {
+				Ω(exitStatus).Should(Equal(1))
+			})
+
 		})
 
 	})
@@ -48,7 +73,7 @@ var _ = Describe("Logger", func() {
 		var file string
 
 		JustBeforeEach(func() {
-			logger = rslog.NewFile(pkg, file)
+			logger = NewFile(pkg, file)
 		})
 
 		Describe("with a valid filename", func() {
@@ -69,7 +94,9 @@ var _ = Describe("Logger", func() {
 
 			JustBeforeEach(func() {
 				Ω(logger).ShouldNot(BeNil())
-				logger.Info("42", "context", "foo")
+				logger.Info("42", "true", true, "false", false, "float32", 3.14,
+					"float64", float64(3.15), "int", 1, "string", "foo",
+					"other", struct{ val string }{val: "bar"})
 				logC, err := ioutil.ReadAll(f)
 				Ω(err).ShouldNot(HaveOccurred())
 				logContent = string(logC)
@@ -91,9 +118,36 @@ var _ = Describe("Logger", func() {
 			})
 
 			It("logs the context", func() {
-				expected := "context=foo"
+				expected := "true=true"
+				Ω(string(logContent)).Should(ContainSubstring(expected))
+				expected = "false=false"
+				Ω(string(logContent)).Should(ContainSubstring(expected))
+				expected = "float32=3.14"
+				Ω(string(logContent)).Should(ContainSubstring(expected))
+				expected = "float64=3.15"
+				Ω(string(logContent)).Should(ContainSubstring(expected))
+				expected = "int=1"
+				Ω(string(logContent)).Should(ContainSubstring(expected))
+				expected = "string=foo"
+				Ω(string(logContent)).Should(ContainSubstring(expected))
+				expected = "other={val:bar}"
 				Ω(string(logContent)).Should(ContainSubstring(expected))
 			})
+
+			Describe("with nil context data", func() {
+				JustBeforeEach(func() {
+					logger.Info("oops", "nil", error(nil))
+					logC, err := ioutil.ReadAll(f)
+					Ω(err).ShouldNot(HaveOccurred())
+					logContent = string(logC)
+				})
+
+				It("logs nil", func() {
+					expected := "nil=nil"
+					Ω(string(logContent)).Should(ContainSubstring(expected))
+				})
+			})
+
 		})
 
 		Describe("with an invalid filename", func() {
@@ -101,7 +155,7 @@ var _ = Describe("Logger", func() {
 
 			BeforeEach(func() {
 				file = ""
-				rslog.OSExit = func(s int) { exitStatus = s }
+				osExit = func(s int) { exitStatus = s }
 			})
 
 			It("exits the process with status code 1", func() {

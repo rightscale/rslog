@@ -3,6 +3,8 @@ package rslog
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"log/syslog"
 	"os"
 	"reflect"
 	"strconv"
@@ -11,9 +13,6 @@ import (
 
 	"gopkg.in/inconshreveable/log15.v2"
 )
-
-// Override for testing
-var OSExit = os.Exit
 
 // NewFile creates a file based logger.
 // pkg specifies the name of the (Go) package that gets logged with each entry.
@@ -24,7 +23,7 @@ func NewFile(pkg, file string) log15.Logger {
 	if err != nil {
 		// Don't try to use log as that could panic
 		fmt.Printf("Can't create log file %s: %s", file, err)
-		OSExit(1)
+		osExit(1)
 		return nil // for tests
 	}
 	log15.Root().SetHandler(h)
@@ -39,14 +38,32 @@ func NewFile(pkg, file string) log15.Logger {
 func NewSyslog(pkg, tag string) log15.Logger {
 	log := log15.New("pkg", pkg)
 	log.Info("Switching logging to syslog", "tag", tag)
-	h, err := log15.SyslogHandler(tag, SimpleFormat(false))
+	sysWr, err := syslogNew(syslog.LOG_INFO|syslog.LOG_LOCAL0, tag)
 	if err != nil {
 		// Don't try to use log as that could panic
 		fmt.Printf("Can't connect to syslog: %s", err)
-		OSExit(1)
+		osExit(1)
 		return nil // for tests
 	}
-	log15.Root().SetHandler(h)
+	h := log15.FuncHandler(func(r *log15.Record) error {
+		var syslogFn = sysWr.Info
+		switch r.Lvl {
+		case log15.LvlCrit:
+			syslogFn = sysWr.Crit
+		case log15.LvlError:
+			syslogFn = sysWr.Err
+		case log15.LvlWarn:
+			syslogFn = sysWr.Warning
+		case log15.LvlInfo:
+			syslogFn = sysWr.Info
+		case log15.LvlDebug:
+			syslogFn = sysWr.Debug
+		}
+		fmtr := SimpleFormat(false)
+		s := strings.TrimSpace(string(fmtr.Format(r)))
+		return syslogFn(s)
+	})
+	log15.Root().SetHandler(log15.LazyHandler(&closingHandler{sysWr, h}))
 	log.Info("Started logging here")
 	return log
 }
@@ -176,3 +193,20 @@ func escapeString(s string) string {
 	}
 	return string(e.Bytes()[start:stop])
 }
+
+// copied from log15
+type closingHandler struct {
+	io.WriteCloser
+	log15.Handler
+}
+
+// copied from log15
+func (h *closingHandler) Close() error {
+	return h.WriteCloser.Close()
+}
+
+// Override for testing
+var (
+	osExit    = os.Exit
+	syslogNew = syslog.New
+)
