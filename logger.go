@@ -14,27 +14,19 @@ import (
 )
 
 // NewFile creates a file based logger.
-// pkg specifies the name of the (Go) package that gets logged with each entry.
-func NewFile(pkg, file string) (log15.Logger, error) {
-	log := log15.New("pkg", pkg)
-	log.Info("Switching logging", "file", file)
+func NewFileHandler(file string) (log15.Handler, error) {
 	h, err := log15.FileHandler(file, SimpleFormat(true))
 	if err != nil {
 		// Don't try to use log as that could panic
 		return nil, fmt.Errorf("failed to create log file %s: %s", file, err)
 	}
-	log15.Root().SetHandler(h)
-	log.Info("Started logging here")
-	return log, nil
+	return h, nil
 }
 
 // NewSyslog creates a syslog based logger.
-// pkg specifies the name of the (Go) package that gets logged with each entry.
 // tag is used to prefix all log entries.
 // Use an empty tag to prefix log entries with the process name (os.Arg[0]).
-func NewSyslog(pkg, tag string) (log15.Logger, error) {
-	log := log15.New("pkg", pkg)
-	log.Info("Switching logging to syslog", "tag", tag)
+func NewSyslogHandler(tag string) (log15.Handler, error) {
 	sysWr, err := syslogNew(syslog.LOG_NOTICE|syslog.LOG_LOCAL0, tag)
 	if err != nil {
 		// Don't try to use log as that could panic
@@ -58,9 +50,7 @@ func NewSyslog(pkg, tag string) (log15.Logger, error) {
 		s := strings.TrimSpace(string(fmtr.Format(r)))
 		return syslogFn(s)
 	})
-	log15.Root().SetHandler(log15.LazyHandler(&closingHandler{sysWr, h}))
-	log.Info("Started logging here")
-	return log, nil
+	return h, nil
 }
 
 // SimpleFormat returns a log15 formatter that uses a logfmt like output.

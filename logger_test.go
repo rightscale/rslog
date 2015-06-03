@@ -21,13 +21,16 @@ func TestLogger(t *testing.T) {
 var _ = Describe("Logger", func() {
 	var logger log15.Logger
 
-	Describe("NewSyslog", func() {
-		var pkg string
+	Describe("NewSyslogHandler", func() {
 		var tag string
 		var err error
 
 		JustBeforeEach(func() {
-			logger, err = NewSyslog(pkg, tag)
+			var handler log15.Handler
+			if handler, err = NewSyslogHandler(tag); err == nil {
+				logger = log15.New()
+				log15.Root().SetHandler(handler)
+			}
 		})
 
 		Describe("with a valid setup", func() {
@@ -36,7 +39,6 @@ var _ = Describe("Logger", func() {
 
 			BeforeEach(func() {
 				tag = "foo"
-				pkg = "PACKAGE"
 				syslogNew = func(p syslog.Priority, t string) (*syslog.Writer, error) {
 					usedTag = t
 					usedPriority = p
@@ -68,12 +70,15 @@ var _ = Describe("Logger", func() {
 	})
 
 	Describe("NewFile", func() {
-		var pkg string
 		var file string
 		var err error
 
 		JustBeforeEach(func() {
-			logger, err = NewFile(pkg, file)
+			var handler log15.Handler
+			if handler, err = NewFileHandler(file); err == nil {
+				logger = log15.New()
+				log15.Root().SetHandler(handler)
+			}
 		})
 
 		Describe("with a valid filename", func() {
@@ -85,7 +90,6 @@ var _ = Describe("Logger", func() {
 				f, err = ioutil.TempFile("", "")
 				Ω(err).ShouldNot(HaveOccurred())
 				file = f.Name()
-				pkg = "PACKAGE"
 			})
 
 			AfterEach(func() {
@@ -105,12 +109,6 @@ var _ = Describe("Logger", func() {
 			It("creates a valid logger", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 				expected := `INFO 42`
-				Ω(string(logContent)).Should(ContainSubstring(expected))
-			})
-
-			It("logs the package name", func() {
-				Ω(err).ShouldNot(HaveOccurred())
-				expected := `PACKAGE`
 				Ω(string(logContent)).Should(ContainSubstring(expected))
 			})
 
