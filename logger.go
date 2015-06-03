@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log/syslog"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -16,34 +15,30 @@ import (
 
 // NewFile creates a file based logger.
 // pkg specifies the name of the (Go) package that gets logged with each entry.
-func NewFile(pkg, file string) log15.Logger {
+func NewFile(pkg, file string) (log15.Logger, error) {
 	log := log15.New("pkg", pkg)
 	log.Info("Switching logging", "file", file)
 	h, err := log15.FileHandler(file, SimpleFormat(true))
 	if err != nil {
 		// Don't try to use log as that could panic
-		fmt.Printf("Can't create log file %s: %s", file, err)
-		osExit(1)
-		return nil // for tests
+		return nil, fmt.Errorf("failed to create log file %s: %s", file, err)
 	}
 	log15.Root().SetHandler(h)
 	log.Info("Started logging here")
-	return log
+	return log, nil
 }
 
 // NewSyslog creates a syslog based logger.
 // pkg specifies the name of the (Go) package that gets logged with each entry.
 // tag is used to prefix all log entries.
 // Use an empty tag to prefix log entries with the process name (os.Arg[0]).
-func NewSyslog(pkg, tag string) log15.Logger {
+func NewSyslog(pkg, tag string) (log15.Logger, error) {
 	log := log15.New("pkg", pkg)
 	log.Info("Switching logging to syslog", "tag", tag)
 	sysWr, err := syslogNew(syslog.LOG_NOTICE|syslog.LOG_LOCAL0, tag)
 	if err != nil {
 		// Don't try to use log as that could panic
-		fmt.Printf("Can't connect to syslog: %s", err)
-		osExit(1)
-		return nil // for tests
+		return nil, fmt.Errorf("failed to connect to syslog: %s", err)
 	}
 	h := log15.FuncHandler(func(r *log15.Record) error {
 		var syslogFn = sysWr.Info
@@ -65,7 +60,7 @@ func NewSyslog(pkg, tag string) log15.Logger {
 	})
 	log15.Root().SetHandler(log15.LazyHandler(&closingHandler{sysWr, h}))
 	log.Info("Started logging here")
-	return log
+	return log, nil
 }
 
 // SimpleFormat returns a log15 formatter that uses a logfmt like output.
@@ -207,6 +202,5 @@ func (h *closingHandler) Close() error {
 
 // Override for testing
 var (
-	osExit    = os.Exit
 	syslogNew = syslog.New
 )

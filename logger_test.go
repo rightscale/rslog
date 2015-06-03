@@ -24,9 +24,10 @@ var _ = Describe("Logger", func() {
 	Describe("NewSyslog", func() {
 		var pkg string
 		var tag string
+		var err error
 
 		JustBeforeEach(func() {
-			logger = NewSyslog(pkg, tag)
+			logger, err = NewSyslog(pkg, tag)
 		})
 
 		Describe("with a valid setup", func() {
@@ -44,6 +45,7 @@ var _ = Describe("Logger", func() {
 			})
 
 			It("creates a valid logger", func() {
+				Ω(err).ShouldNot(HaveOccurred())
 				Ω(logger).ShouldNot(BeNil())
 				Ω(usedTag).Should(Equal(tag))
 				Ω(usedPriority).Should(Equal(syslog.LOG_NOTICE | syslog.LOG_LOCAL0))
@@ -51,17 +53,14 @@ var _ = Describe("Logger", func() {
 		})
 
 		Describe("when syslog connection fails", func() {
-			var exitStatus int
-
 			BeforeEach(func() {
 				syslogNew = func(_ syslog.Priority, _ string) (*syslog.Writer, error) {
 					return nil, fmt.Errorf("kaboom")
 				}
-				osExit = func(s int) { exitStatus = s }
 			})
 
-			It("exits the process with status code 1", func() {
-				Ω(exitStatus).Should(Equal(1))
+			It("reports an error", func() {
+				Ω(err).Should(HaveOccurred())
 			})
 
 		})
@@ -71,9 +70,10 @@ var _ = Describe("Logger", func() {
 	Describe("NewFile", func() {
 		var pkg string
 		var file string
+		var err error
 
 		JustBeforeEach(func() {
-			logger = NewFile(pkg, file)
+			logger, err = NewFile(pkg, file)
 		})
 
 		Describe("with a valid filename", func() {
@@ -103,21 +103,25 @@ var _ = Describe("Logger", func() {
 			})
 
 			It("creates a valid logger", func() {
+				Ω(err).ShouldNot(HaveOccurred())
 				expected := `INFO 42`
 				Ω(string(logContent)).Should(ContainSubstring(expected))
 			})
 
 			It("logs the package name", func() {
+				Ω(err).ShouldNot(HaveOccurred())
 				expected := `PACKAGE`
 				Ω(string(logContent)).Should(ContainSubstring(expected))
 			})
 
 			It("logs the timestamp", func() {
+				Ω(err).ShouldNot(HaveOccurred())
 				expected := `\[201[0-9]-[0-9]{2}-[0-9]{2}.*\]`
 				Ω(string(logContent)).Should(MatchRegexp(expected))
 			})
 
 			It("logs the context", func() {
+				Ω(err).ShouldNot(HaveOccurred())
 				expected := "true=true"
 				Ω(string(logContent)).Should(ContainSubstring(expected))
 				expected = "false=false"
@@ -143,6 +147,7 @@ var _ = Describe("Logger", func() {
 				})
 
 				It("logs nil", func() {
+					Ω(err).ShouldNot(HaveOccurred())
 					expected := "nil=nil"
 					Ω(string(logContent)).Should(ContainSubstring(expected))
 				})
@@ -151,15 +156,13 @@ var _ = Describe("Logger", func() {
 		})
 
 		Describe("with an invalid filename", func() {
-			var exitStatus int
 
 			BeforeEach(func() {
 				file = ""
-				osExit = func(s int) { exitStatus = s }
 			})
 
-			It("exits the process with status code 1", func() {
-				Ω(exitStatus).Should(Equal(1))
+			It("reports an error", func() {
+				Ω(err).Should(HaveOccurred())
 			})
 		})
 	})
