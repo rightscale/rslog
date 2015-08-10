@@ -13,7 +13,7 @@ import (
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
-// NewFile creates a file based logger.
+// NewFileHandler creates a file based logger.
 func NewFileHandler(file string) (log15.Handler, error) {
 	h, err := log15.FileHandler(file, SimpleFormat(true))
 	if err != nil {
@@ -23,11 +23,11 @@ func NewFileHandler(file string) (log15.Handler, error) {
 	return h, nil
 }
 
-// NewSyslog creates a syslog based logger.
+// NewSyslogHandler creates a syslog based logger.
 // tag is used to prefix all log entries.
 // Use an empty tag to prefix log entries with the process name (os.Arg[0]).
 func NewSyslogHandler(tag string) (log15.Handler, error) {
-	sysWr, err := syslogNew(syslog.LOG_NOTICE|syslog.LOG_LOCAL0, tag)
+	sysWr, err := SyslogNew(syslog.LOG_NOTICE|syslog.LOG_LOCAL0, tag)
 	if err != nil {
 		// Don't try to use log as that could panic
 		return nil, fmt.Errorf("failed to connect to syslog: %s", err)
@@ -192,5 +192,5 @@ func (h *closingHandler) Close() error {
 
 // Override for testing
 var (
-	syslogNew = syslog.New
+	SyslogNew = syslog.New
 )
