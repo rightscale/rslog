@@ -39,7 +39,7 @@ var _ = Describe("Logger", func() {
 
 			BeforeEach(func() {
 				tag = "foo"
-				syslogNew = func(p syslog.Priority, t string) (*syslog.Writer, error) {
+				SyslogNew = func(p syslog.Priority, t string) (*syslog.Writer, error) {
 					usedTag = t
 					usedPriority = p
 					return &syslog.Writer{}, nil
@@ -56,7 +56,7 @@ var _ = Describe("Logger", func() {
 
 		Describe("when syslog connection fails", func() {
 			BeforeEach(func() {
-				syslogNew = func(_ syslog.Priority, _ string) (*syslog.Writer, error) {
+				SyslogNew = func(_ syslog.Priority, _ string) (*syslog.Writer, error) {
 					return nil, fmt.Errorf("kaboom")
 				}
 			})
