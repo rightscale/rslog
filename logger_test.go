@@ -69,7 +69,7 @@ var _ = Describe("Logger", func() {
 
 	})
 
-	Describe("NewFile", func() {
+	Describe("NewFileHandler", func() {
 		var file string
 		var err error
 
@@ -163,5 +163,62 @@ var _ = Describe("Logger", func() {
 				Ω(err).Should(HaveOccurred())
 			})
 		})
+
+	})
+
+	Describe("TerseFormat", func() {
+		var file string
+		var err error
+
+		JustBeforeEach(func() {
+			var handler log15.Handler
+			if handler, err = log15.FileHandler(file, TerseFormat()); err == nil {
+				logger = log15.New("", "[empty tag value]")
+				log15.Root().SetHandler(handler)
+			}
+		})
+
+		Describe("with a valid filename", func() {
+			var f *os.File
+			var logContent string
+
+			BeforeEach(func() {
+				var err error
+				f, err = ioutil.TempFile("", "")
+				Ω(err).ShouldNot(HaveOccurred())
+				file = f.Name()
+			})
+
+			AfterEach(func() {
+				os.Remove(f.Name())
+			})
+
+			JustBeforeEach(func() {
+				Ω(logger).ShouldNot(BeNil())
+				logger.Error("error message", 1, 2, 3, 4)
+				logger.Warn("warning message")
+				logger.Info("info message",
+					"true", true, "false", false,
+					"float32", 3.14, "float64", float64(3.15),
+					"int", 1, "string", "foo",
+					"other", struct{ val string }{val: "bar"})
+				logger.Debug("debug message", "debugging", "data")
+				logC, err := ioutil.ReadAll(f)
+				Ω(err).ShouldNot(HaveOccurred())
+				logContent = string(logC)
+			})
+
+			It("creates a valid logger", func() {
+				Ω(err).ShouldNot(HaveOccurred())
+				expected := `[empty tag value] error message                            LOG_ERR=1 LOG_ERR=3
+[empty tag value] warning message
+[empty tag value] info message                             true=true false=false float32=3.140 float64=3.150 int=1 string=foo other={val:bar}
+[empty tag value] debug message                            debugging=data
+`
+				Ω(string(logContent)).Should(Equal(expected))
+			})
+
+		})
+
 	})
 })

@@ -57,35 +57,93 @@ func NewSyslogHandler(tag string) (log15.Handler, error) {
 // The timestamps switch can be used to toggle prefixing each entry with the current time.
 // (see https://brandur.org/logfmt)
 func SimpleFormat(timestamps bool) log15.Format {
+	return formatter(timestamps, true)
+}
+
+// TerseFormat removes all additional metadata (timestampts, level) on the
+// assumption that the underlying sink (syslog, etc.) already provides and/or
+// does not require them.
+func TerseFormat() log15.Format {
+	return formatter(false, false)
+}
+
+// a formatter with optional parts.
+func formatter(timestamps, level bool) log15.Format {
 	return log15.FormatFunc(func(r *log15.Record) []byte {
 		b := &bytes.Buffer{}
-		lvl := strings.ToUpper(r.Lvl.String())
+
+		// time
 		if timestamps {
-			fmt.Fprintf(b, "[%s] %s %s ", r.Time.Format(simpleTimeFormat), lvl, r.Msg)
-		} else {
-			fmt.Fprintf(b, "%s %s ", lvl, r.Msg)
+			b.WriteByte('[')
+			b.WriteString(r.Time.Format(simpleTimeFormat))
+			b.WriteByte(']')
 		}
 
-		// try to justify the log output for short messages
-		if len(r.Ctx) > 0 && len(r.Msg) < simpleMsgJust {
-			b.Write(bytes.Repeat([]byte{' '}, simpleMsgJust-len(r.Msg)))
-		}
-		// print the keys logfmt style
-		for i := 0; i < len(r.Ctx); i += 2 {
-			if i != 0 {
+		// level
+		if level {
+			if b.Len() > 0 {
 				b.WriteByte(' ')
 			}
-
-			k, ok := r.Ctx[i].(string)
-			v := formatLogfmtValue(r.Ctx[i+1])
-			if !ok {
-				k, v = "LOG_ERR", formatLogfmtValue(k)
-			}
-
-			// XXX: we should probably check that all of your key bytes aren't invalid
-			fmt.Fprintf(b, "%s=%s", k, v)
+			b.WriteString(strings.ToUpper(r.Lvl.String()))
 		}
 
+		// special case for the 'empty tag' in order to support intermixing legacy
+		// logging with log15 style. the empty tag's value is thus free-form and
+		// always preceeds the message as a string literal. the empty tag, if any,
+		// must appear first in context.
+		context := r.Ctx
+		contextOffset := 0
+		contextLength := len(context)
+		if contextLength > 0 {
+			k, ok := context[0].(string)
+			if ok && len(k) == 0 {
+				contextOffset = 2
+				if b.Len() > 0 {
+					b.WriteByte(' ')
+				}
+				v, ok := context[1].(string)
+				if ok {
+					b.WriteString(v)
+				} else {
+					b.WriteString("LOG_ERR=\"\"")
+				}
+			}
+		}
+
+		// message
+		message := r.Msg
+		if len(message) > 0 {
+			if b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(message)
+		}
+
+		// remaining context, if any.
+		if contextLength > contextOffset {
+			// try to justify the log output for short messages
+			messageLength := len(message)
+			if messageLength < simpleMsgJust {
+				b.Write(bytes.Repeat([]byte{' '}, simpleMsgJust-messageLength))
+			}
+
+			// print the keys logfmt style
+			for i := contextOffset; i < contextLength; i += 2 {
+				var v string
+				k, ok := context[i].(string)
+				if ok {
+					v = formatLogfmtValue(context[i + 1])
+				} else {
+					k, v = "LOG_ERR", formatLogfmtValue(context[i])
+				}
+				if b.Len() > 0 {
+					b.WriteByte(' ')
+				}
+				b.WriteString(k)
+				b.WriteByte('=')
+				b.WriteString(v)
+			}
+		}
 		b.WriteByte('\n')
 		return b.Bytes()
 	})
