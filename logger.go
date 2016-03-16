@@ -32,7 +32,31 @@ func NewSyslogHandler(tag string) (log15.Handler, error) {
 		// Don't try to use log as that could panic
 		return nil, fmt.Errorf("failed to connect to syslog: %s", err)
 	}
-	h := log15.FuncHandler(func(r *log15.Record) error {
+	return newSyslogHandler(sysWr), nil
+}
+
+// NewTCPSyslogHandler creates a new syslog based handler that talks to
+// syslog on the provided address using TCP protocol.
+func NewTCPSyslogHandler(addr string, tag string) (log15.Handler, error) {
+	sysWr, err := SyslogNewTCP(addr, syslog.LOG_NOTICE|syslog.LOG_LOCAL0, tag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to syslog: %s", err)
+	}
+	return newSyslogHandler(sysWr), nil
+}
+
+// NewUDPSyslogHandler creates a new syslog based handler that talks to
+// syslog on the provided address using UDP protocol.
+func NewUDPSyslogHandler(addr string, tag string) (log15.Handler, error) {
+	sysWr, err := SyslogNewUDP(addr, syslog.LOG_NOTICE|syslog.LOG_LOCAL0, tag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to syslog: %s", err)
+	}
+	return newSyslogHandler(sysWr), nil
+}
+
+func newSyslogHandler(sysWr *syslog.Writer) log15.Handler {
+	return log15.FuncHandler(func(r *log15.Record) error {
 		var syslogFn = sysWr.Info
 		switch r.Lvl {
 		case log15.LvlCrit:
@@ -50,7 +74,6 @@ func NewSyslogHandler(tag string) (log15.Handler, error) {
 		s := strings.TrimSpace(string(fmtr.Format(r)))
 		return syslogFn(s)
 	})
-	return h, nil
 }
 
 // SimpleFormat returns a log15 formatter that uses a logfmt like output.
@@ -132,7 +155,7 @@ func formatter(timestamps, level bool) log15.Format {
 				var v string
 				k, ok := context[i].(string)
 				if ok {
-					v = formatLogfmtValue(context[i + 1])
+					v = formatLogfmtValue(context[i+1])
 				} else {
 					k, v = "LOG_ERR", formatLogfmtValue(context[i])
 				}
@@ -250,5 +273,11 @@ func (h *closingHandler) Close() error {
 
 // Override for testing
 var (
-	SyslogNew = syslog.New
+	SyslogNew    = syslog.New
+	SyslogNewTCP = func(addr string, p syslog.Priority, t string) (*syslog.Writer, error) {
+		return syslog.Dial("tcp", addr, p, t)
+	}
+	SyslogNewUDP = func(addr string, p syslog.Priority, t string) (*syslog.Writer, error) {
+		return syslog.Dial("udp", addr, p, t)
+	}
 )

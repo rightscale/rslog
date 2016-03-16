@@ -69,6 +69,104 @@ var _ = Describe("Logger", func() {
 
 	})
 
+	Describe("NewTCPSyslogHandler", func() {
+		var tag, addr string
+		var err error
+
+		JustBeforeEach(func() {
+			var handler log15.Handler
+			if handler, err = NewTCPSyslogHandler(addr, tag); err == nil {
+				logger = log15.New()
+				log15.Root().SetHandler(handler)
+			}
+		})
+
+		Describe("with a valid setup", func() {
+			var usedAddr, usedTag string
+			var usedPriority syslog.Priority
+
+			BeforeEach(func() {
+				tag = "foo"
+				addr = "syslog:514"
+				SyslogNewTCP = func(addr string, p syslog.Priority, t string) (*syslog.Writer, error) {
+					usedAddr = addr
+					usedTag = t
+					usedPriority = p
+					return &syslog.Writer{}, nil
+				}
+			})
+
+			It("creates a valid logger", func() {
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(logger).ShouldNot(BeNil())
+				Ω(usedAddr).Should(Equal(addr))
+				Ω(usedTag).Should(Equal(tag))
+				Ω(usedPriority).Should(Equal(syslog.LOG_NOTICE | syslog.LOG_LOCAL0))
+			})
+		})
+
+		Describe("when syslog connection fails", func() {
+			BeforeEach(func() {
+				SyslogNewTCP = func(_ string, _ syslog.Priority, _ string) (*syslog.Writer, error) {
+					return nil, fmt.Errorf("kaboom")
+				}
+			})
+
+			It("reports an error", func() {
+				Ω(err).Should(HaveOccurred())
+			})
+		})
+	})
+
+	Describe("NewUDPSyslogHandler", func() {
+		var tag, addr string
+		var err error
+
+		JustBeforeEach(func() {
+			var handler log15.Handler
+			if handler, err = NewUDPSyslogHandler(addr, tag); err == nil {
+				logger = log15.New()
+				log15.Root().SetHandler(handler)
+			}
+		})
+
+		Describe("with a valid setup", func() {
+			var usedAddr, usedTag string
+			var usedPriority syslog.Priority
+
+			BeforeEach(func() {
+				tag = "foo"
+				addr = "syslog:514"
+				SyslogNewUDP = func(addr string, p syslog.Priority, t string) (*syslog.Writer, error) {
+					usedAddr = addr
+					usedTag = t
+					usedPriority = p
+					return &syslog.Writer{}, nil
+				}
+			})
+
+			It("creates a valid logger", func() {
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(logger).ShouldNot(BeNil())
+				Ω(usedAddr).Should(Equal(addr))
+				Ω(usedTag).Should(Equal(tag))
+				Ω(usedPriority).Should(Equal(syslog.LOG_NOTICE | syslog.LOG_LOCAL0))
+			})
+		})
+
+		Describe("when syslog connection fails", func() {
+			BeforeEach(func() {
+				SyslogNewUDP = func(_ string, _ syslog.Priority, _ string) (*syslog.Writer, error) {
+					return nil, fmt.Errorf("kaboom")
+				}
+			})
+
+			It("reports an error", func() {
+				Ω(err).Should(HaveOccurred())
+			})
+		})
+	})
+
 	Describe("NewFileHandler", func() {
 		var file string
 		var err error
