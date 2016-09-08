@@ -80,30 +80,53 @@ func newSyslogHandler(sysWr *syslog.Writer) log15.Handler {
 // The timestamps switch can be used to toggle prefixing each entry with the current time.
 // (see https://brandur.org/logfmt)
 func SimpleFormat(timestamps bool) log15.Format {
-	return formatter(timestamps, true)
+	fmtConfig := FmtConfig{
+		Level:            true,
+		MsgJustification: simpleMsgJust,
+		TimestampFormat:  simpleTimeFormat,
+	}
+	if !timestamps {
+		fmtConfig.TimestampFormat = ""
+	}
+	return ConfigurableFormatter(fmtConfig)
 }
 
 // TerseFormat removes all additional metadata (timestampts, level) on the
 // assumption that the underlying sink (syslog, etc.) already provides and/or
 // does not require them.
 func TerseFormat() log15.Format {
-	return formatter(false, false)
+	fmtConfig := FmtConfig{
+		MsgJustification: simpleMsgJust,
+	}
+	return ConfigurableFormatter(fmtConfig)
 }
 
-// a formatter with optional parts.
-func formatter(timestamps, level bool) log15.Format {
+const simpleTimeFormat = "2006-01-02 15:04:05"
+const simpleMsgJust = 40
+
+// FmtConfig Formatter configuretion
+type FmtConfig struct {
+	TimestampFormat  string // timestamp format (to disable timestamps set to "")
+	Level            bool
+	MsgCtxSeparator  string
+	MsgJustification int
+}
+
+// ConfigurableFormatter allows to set timestamp, logLevel, message to context
+// separator and message justification.
+func ConfigurableFormatter(f FmtConfig) log15.Format {
 	return log15.FormatFunc(func(r *log15.Record) []byte {
 		b := &bytes.Buffer{}
 
 		// time
-		if timestamps {
+		if f.TimestampFormat != "" {
 			b.WriteByte('[')
-			b.WriteString(r.Time.Format(simpleTimeFormat))
+			b.WriteString(r.Time.Format(f.TimestampFormat))
 			b.WriteByte(']')
 		}
 
 		// level
-		if level {
+		if f.Level {
 			if b.Len() > 0 {
 				b.WriteByte(' ')
 			}
@@ -146,9 +169,11 @@ func formatter(timestamps, level bool) log15.Format {
 		if contextLength > contextOffset {
 			// try to justify the log output for short messages
 			messageLength := len(message)
-			if messageLength < simpleMsgJust {
-				b.Write(bytes.Repeat([]byte{' '}, simpleMsgJust-messageLength))
+			if messageLength < f.MsgJustification {
+				b.Write(bytes.Repeat([]byte{' '}, f.MsgJustification-messageLength))
 			}
+
+			useMsgCtxSeparator := len(f.MsgCtxSeparator) > 0
 
 			// print the keys logfmt style
 			for i := contextOffset; i < contextLength; i += 2 {
@@ -160,7 +185,12 @@ func formatter(timestamps, level bool) log15.Format {
 					k, v = "LOG_ERR", formatLogfmtValue(context[i])
 				}
 				if b.Len() > 0 {
-					b.WriteByte(' ')
+					if useMsgCtxSeparator {
+						b.WriteString(f.MsgCtxSeparator)
+						useMsgCtxSeparator = false
+					} else {
+						b.WriteByte(' ')
+					}
 				}
 				b.WriteString(k)
 				b.WriteByte('=')
@@ -171,9 +201,6 @@ func formatter(timestamps, level bool) log15.Format {
 		return b.Bytes()
 	})
 }
-
-const simpleTimeFormat = "2006-01-02 15:04:05"
-const simpleMsgJust = 40
 
 // copied from log15 https://github.com/inconshreveable/log15/blob/master/format.go#L203-L223
 func formatLogfmtValue(value interface{}) string {
