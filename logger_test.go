@@ -5,10 +5,11 @@ import (
 	"io/ioutil"
 	"log/syslog"
 	"os"
+	"time"
 
+	"github.com/inconshreveable/log15"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/inconshreveable/log15"
 
 	"testing"
 )
@@ -315,8 +316,75 @@ var _ = Describe("Logger", func() {
 `
 				Ω(string(logContent)).Should(Equal(expected))
 			})
+		})
+	})
 
+	Describe("ConfigurableFormatter()", func() {
+		var (
+			logRecord = &log15.Record{
+				Lvl:  log15.LvlInfo,
+				Time: time.Date(2016, 9, 8, 15, 39, 45, 0, time.UTC),
+				Msg:  "Privet!",
+				Ctx:  []interface{}{"a", "b", "c", "1"},
+			}
+			formatFunc log15.Format
+			result     string
+		)
+		JustBeforeEach(func() {
+			result = string(formatFunc.Format(logRecord))
 		})
 
+		Context("Default: Everything is OFF", func() {
+			BeforeEach(func() {
+				formatFunc = ConfigurableFormatter(FmtConfig{})
+			})
+			It("works", func() {
+				Expect(result).To(Equal("Privet! a=b c=1\n"))
+			})
+		})
+
+		Context("Custom: Everything is ON", func() {
+			BeforeEach(func() {
+				fmtConfig := FmtConfig{
+					Level:            true,
+					TimestampFormat:  "Mon Jan 2 15:04:05 -0700 MST 2006",
+					MsgJustification: 15,
+					MsgCtxSeparator:  "--> ",
+				}
+				formatFunc = ConfigurableFormatter(fmtConfig)
+			})
+			It("works", func() {
+				Expect(result).To(Equal("[Thu Sep 8 15:39:45 +0000 UTC 2016] INFO Privet!        --> a=b c=1\n"))
+			})
+		})
+
+		Describe("SimpleFormat()", func() {
+			Context("With timestamps", func() {
+				BeforeEach(func() {
+					formatFunc = SimpleFormat(true)
+				})
+				It("works", func() {
+					Expect(result).To(Equal("[2016-09-08 15:39:45] INFO Privet!                                  a=b c=1\n"))
+				})
+			})
+
+			Context("Without timestamps", func() {
+				BeforeEach(func() {
+					formatFunc = SimpleFormat(false)
+				})
+				It("works", func() {
+					Expect(result).To(Equal("INFO Privet!                                  a=b c=1\n"))
+				})
+			})
+		})
+
+		Describe("TerseFormat()", func() {
+			BeforeEach(func() {
+				formatFunc = TerseFormat()
+			})
+			It("works", func() {
+				Expect(result).To(Equal("Privet!                                  a=b c=1\n"))
+			})
+		})
 	})
 })
