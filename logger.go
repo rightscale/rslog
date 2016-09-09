@@ -91,7 +91,7 @@ func SimpleFormat(timestamps bool) log15.Format {
 	return ConfigurableFormatter(fmtConfig)
 }
 
-// TerseFormat removes all additional metadata (timestampts, level) on the
+// TerseFormat removes all additional metadata (timestamps, level) on the
 // assumption that the underlying sink (syslog, etc.) already provides and/or
 // does not require them.
 func TerseFormat() log15.Format {
@@ -104,7 +104,7 @@ func TerseFormat() log15.Format {
 const simpleTimeFormat = "2006-01-02 15:04:05"
 const simpleMsgJust = 40
 
-// FmtConfig Formatter configuretion
+// FmtConfig Formatter configuration
 type FmtConfig struct {
 	TimestampFormat  string // timestamp format (to disable timestamps set to "")
 	Level            bool
@@ -173,7 +173,12 @@ func ConfigurableFormatter(f FmtConfig) log15.Format {
 				b.Write(bytes.Repeat([]byte{' '}, f.MsgJustification-messageLength))
 			}
 
-			useMsgCtxSeparator := len(f.MsgCtxSeparator) > 0
+			// Separate message from its context
+			if f.MsgCtxSeparator == "" {
+				b.WriteByte(' ')
+			} else {
+				b.WriteString(f.MsgCtxSeparator)
+			}
 
 			// print the keys logfmt style
 			for i := contextOffset; i < contextLength; i += 2 {
@@ -184,13 +189,10 @@ func ConfigurableFormatter(f FmtConfig) log15.Format {
 				} else {
 					k, v = "LOG_ERR", formatLogfmtValue(context[i])
 				}
-				if b.Len() > 0 {
-					if useMsgCtxSeparator {
-						b.WriteString(f.MsgCtxSeparator)
-						useMsgCtxSeparator = false
-					} else {
-						b.WriteByte(' ')
-					}
+				// Print separator between key/value pairs.
+				// P.S. Skip the very first iteration because the saparator was already printed
+				if b.Len() > 0 && i != contextOffset {
+					b.WriteByte(' ')
 				}
 				b.WriteString(k)
 				b.WriteByte('=')
